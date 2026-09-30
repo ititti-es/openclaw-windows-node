@@ -13,6 +13,7 @@ public sealed class OpenClawChatCoordinator : IDisposable
     private readonly SettingsManager _settings;
     private readonly Func<NodeService?> _nodeServiceAccessor;
     private readonly IOpenClawLogger _logger;
+    private readonly Func<IOperatorGatewayClient?> _operatorClientAccessor;
     private readonly Action<Action>? _post;
     private readonly object _gate = new();
     private readonly object _manualSpeechGate = new();
@@ -47,11 +48,13 @@ public sealed class OpenClawChatCoordinator : IDisposable
     public OpenClawChatCoordinator(
         SettingsManager settings,
         Func<NodeService?> nodeServiceAccessor,
+        Func<IOperatorGatewayClient?> operatorClientAccessor,
         IOpenClawLogger logger,
         Action<Action>? post)
     {
         _settings = settings ?? throw new ArgumentNullException(nameof(settings));
         _nodeServiceAccessor = nodeServiceAccessor ?? throw new ArgumentNullException(nameof(nodeServiceAccessor));
+        _operatorClientAccessor = operatorClientAccessor ?? throw new ArgumentNullException(nameof(operatorClientAccessor));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _post = post;
     }
@@ -170,7 +173,7 @@ public sealed class OpenClawChatCoordinator : IDisposable
         lock (_gate)
         {
             ObjectDisposedException.ThrowIf(_disposed, this);
-            return _fallbackTextToSpeech ??= new TextToSpeechService(_logger, _settings);
+            return _fallbackTextToSpeech ??= new TextToSpeechService(_logger, _settings, _operatorClientAccessor);
         }
     }
 

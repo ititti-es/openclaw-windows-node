@@ -3,8 +3,10 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using OpenClaw.Connection;
 using OpenClaw.Shared;
 using OpenClaw.Shared.Audio;
 using OpenClaw.Shared.Capabilities;
@@ -21,6 +23,7 @@ public sealed class TextToSpeechService : IDisposable
     private readonly SettingsManager _settings;
     private readonly ElevenLabsTextToSpeechClient _elevenLabsClient;
     private readonly MiniMaxTextToSpeechClient _miniMaxClient;
+    private readonly Func<IOperatorGatewayClient?>? _operatorClientAccessor;
     private readonly PiperVoiceManager _piperVoices;
     private readonly object _piperLock = new();
     private PiperTextToSpeechClient? _piperClient;  // lazily loaded; reused across calls for the same voice
@@ -29,8 +32,13 @@ public sealed class TextToSpeechService : IDisposable
     private MediaPlayer? _activePlayer;
     private TaskCompletionSource<bool>? _activeCompletion;
 
-    public TextToSpeechService(IOpenClawLogger logger, SettingsManager settings)
-        : this(logger, settings, new ElevenLabsTextToSpeechClient(), new MiniMaxTextToSpeechClient())
+    private const int GatewayAudioMaxBytes = 16 * 1024 * 1024;
+
+    public TextToSpeechService(
+        IOpenClawLogger logger,
+        SettingsManager settings,
+        Func<IOperatorGatewayClient?>? operatorClientAccessor = null)
+        : this(logger, settings, new ElevenLabsTextToSpeechClient(), new MiniMaxTextToSpeechClient(), operatorClientAccessor)
     {
     }
 
@@ -38,12 +46,14 @@ public sealed class TextToSpeechService : IDisposable
         IOpenClawLogger logger,
         SettingsManager settings,
         ElevenLabsTextToSpeechClient elevenLabsClient,
-        MiniMaxTextToSpeechClient miniMaxClient)
+        MiniMaxTextToSpeechClient miniMaxClient,
+        Func<IOperatorGatewayClient?>? operatorClientAccessor = null)
     {
         _logger = logger;
         _settings = settings;
         _elevenLabsClient = elevenLabsClient;
         _miniMaxClient = miniMaxClient;
+        _operatorClientAccessor = operatorClientAccessor;
         // Piper voices live under the same data directory as Whisper models
         // so the user has a single "AI assets" folder to point at.
         _piperVoices = new PiperVoiceManager(SettingsManager.SettingsDirectoryPath, logger);
@@ -65,6 +75,7 @@ public sealed class TextToSpeechService : IDisposable
         var resolution = TtsCapability.ResolveEffectiveProvider(
             args.Provider, _settings.TtsProvider, readyProviders, allowFallback);
         var provider = resolution.EffectiveProvider;
+        string? gatewayContentType = null;
         var stopwatch = Stopwatch.StartNew();
 
         if (resolution.FellBack)
@@ -101,6 +112,32 @@ public sealed class TextToSpeechService : IDisposable
         {
             await SpeakWithMiniMaxAsync(args, cancellationToken).ConfigureAwait(false);
         }
+        else if (string.Equals(provider, TtsCapability.GatewayProvider, StringComparison.OrdinalIgnoreCase))
+        {
+            try
+            {
+                gatewayContentType = await SpeakWithGatewayAsync(args, cancellationToken).ConfigureAwait(false);
+            }
+            catch (GatewayTtsRequestException) when (allowFallback)
+            {
+                // A configured Gateway can be older than the tts RPC or lose
+                // its provider after the readiness snapshot. Explicit Gateway
+                // calls stay strict; configured/default playback keeps the
+                // existing Windows fallback guarantee.
+                resolution = new TtsProviderResolution(
+                    resolution.RequestedProvider,
+                    TtsCapability.WindowsProvider,
+                    FellBack: true);
+                provider = resolution.EffectiveProvider;
+                args = new TtsSpeakArgs
+                {
+                    Text = args.Text,
+                    Provider = provider,
+                    Interrupt = args.Interrupt
+                };
+                await SpeakWithWindowsAsync(args, cancellationToken).ConfigureAwait(false);
+            }
+        }
         else
         {
             throw new InvalidOperationException($"Unsupported TTS provider '{provider}'.");
@@ -115,7 +152,9 @@ public sealed class TextToSpeechService : IDisposable
             ContentType = string.Equals(provider, TtsCapability.ElevenLabsProvider, StringComparison.OrdinalIgnoreCase)
                     || string.Equals(provider, TtsCapability.MiniMaxProvider, StringComparison.OrdinalIgnoreCase)
                 ? "audio/mpeg"
-                : "audio/wav",
+                : string.Equals(provider, TtsCapability.GatewayProvider, StringComparison.OrdinalIgnoreCase)
+                    ? gatewayContentType
+                    : "audio/wav",
             DurationMs = (int)Math.Min(stopwatch.ElapsedMilliseconds, int.MaxValue)
         };
     }
@@ -225,6 +264,17 @@ public sealed class TextToSpeechService : IDisposable
             return string.IsNullOrWhiteSpace(voiceId)
                 ? TtsCapability.ReadinessNeedsVoice
                 : TtsCapability.ReadinessReady;
+        }
+
+        if (string.Equals(provider, TtsCapability.GatewayProvider, StringComparison.OrdinalIgnoreCase))
+        {
+            var client = _operatorClientAccessor?.Invoke();
+            if (client?.IsConnectedToGateway != true)
+                return TtsCapability.ReadinessGatewayDisconnected;
+
+            return OperatorScopeHelper.CanWriteConfig(client.GrantedOperatorScopes)
+                ? TtsCapability.ReadinessReady
+                : TtsCapability.ReadinessUnavailable;
         }
 
         return TtsCapability.ReadinessUnavailable;
@@ -348,6 +398,115 @@ public sealed class TextToSpeechService : IDisposable
 
         using var stream = await CreateStreamAsync(audio.AudioBytes, cancellationToken).ConfigureAwait(false);
         await PlayStreamAsync(stream, audio.ContentType, args.Interrupt, cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task<string> SpeakWithGatewayAsync(TtsSpeakArgs args, CancellationToken cancellationToken)
+    {
+        var (audio, contentType) = await RequestGatewayAudioAsync(args.Text, cancellationToken).ConfigureAwait(false);
+
+        // Playback errors (including StopSpeaking/interrupt) propagate like the
+        // other providers. Only request failures may trigger Windows fallback,
+        // otherwise an interrupted Gateway utterance would be replayed.
+        using var stream = await CreateStreamAsync(audio, cancellationToken).ConfigureAwait(false);
+        await PlayStreamAsync(stream, contentType, args.Interrupt, cancellationToken).ConfigureAwait(false);
+        return contentType;
+    }
+
+    private async Task<(byte[] Audio, string ContentType)> RequestGatewayAudioAsync(
+        string text,
+        CancellationToken cancellationToken)
+    {
+        var client = _operatorClientAccessor?.Invoke();
+        if (client?.IsConnectedToGateway != true)
+            throw new GatewayTtsRequestException();
+
+        // This is an operator RPC, not a node invocation. Calling the node's
+        // tts.speak command here would recurse back into this service.
+        try
+        {
+            var payload = await client.SendWizardRequestAsync(
+                "tts.speak",
+                new { text },
+                timeoutMs: 30_000).WaitAsync(cancellationToken).ConfigureAwait(false);
+            var audio = DecodeGatewayAudio(payload, out var contentType);
+            return (audio, contentType);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            // Gateway failures can contain provider details. Keep the local
+            // capability log and its remote response free of those details;
+            // log only the failure category so playback problems are diagnosable.
+            _logger.Warn($"Gateway TTS request failed ({ex.GetType().Name})");
+            throw new GatewayTtsRequestException();
+        }
+    }
+
+    private static byte[] DecodeGatewayAudio(JsonElement payload, out string contentType)
+    {
+        if (payload.ValueKind != JsonValueKind.Object
+            || !payload.TryGetProperty("audioBase64", out var base64Element)
+            || base64Element.ValueKind != JsonValueKind.String)
+        {
+            throw new InvalidOperationException("Gateway returned an invalid text-to-speech response.");
+        }
+
+        var base64 = base64Element.GetString();
+        var mime = GetOptionalString(payload, "mimeType")
+            ?? InferGatewayMimeType(
+                GetOptionalString(payload, "outputFormat"),
+                GetOptionalString(payload, "fileExtension"));
+        if (string.IsNullOrWhiteSpace(base64)
+            || base64.Length > ((GatewayAudioMaxBytes + 2) / 3) * 4 + 4
+            || !TryGetSupportedGatewayMimeType(mime, out contentType))
+        {
+            throw new InvalidOperationException("Gateway returned unsupported text-to-speech audio.");
+        }
+
+        // The length check above bounds the decoded size, so decode directly
+        // instead of reserving the full cap up front.
+        var audio = Convert.FromBase64String(base64);
+        if (audio.Length == 0 || audio.Length > GatewayAudioMaxBytes)
+            throw new InvalidOperationException("Gateway returned invalid text-to-speech audio.");
+
+        return audio;
+    }
+
+    private static bool TryGetSupportedGatewayMimeType(string? value, out string contentType)
+    {
+        contentType = value?.Trim().ToLowerInvariant() ?? "";
+        return contentType is "audio/mpeg" or "audio/wav" or "audio/x-wav" or "audio/ogg" or "audio/mp4" or "audio/aac" or "audio/webm";
+    }
+
+    private static string? GetOptionalString(JsonElement payload, string propertyName) =>
+        payload.TryGetProperty(propertyName, out var value) && value.ValueKind == JsonValueKind.String
+            ? value.GetString()
+            : null;
+
+    private static string? InferGatewayMimeType(string? outputFormat, string? fileExtension)
+    {
+        var format = outputFormat?.Trim().ToLowerInvariant();
+        var extension = fileExtension?.Trim().ToLowerInvariant();
+        if (format is "mp3" || format?.StartsWith("mp3_", StringComparison.Ordinal) == true || format?.EndsWith("-mp3", StringComparison.Ordinal) == true || extension == ".mp3")
+            return "audio/mpeg";
+        if (format is "opus" || format?.StartsWith("opus_", StringComparison.Ordinal) == true || extension is ".opus" or ".ogg")
+            return "audio/ogg";
+        if (format?.EndsWith("-wav", StringComparison.Ordinal) == true || extension == ".wav")
+            return "audio/wav";
+        if (format?.EndsWith("-webm", StringComparison.Ordinal) == true || extension == ".webm")
+            return "audio/webm";
+        return null;
+    }
+
+    private sealed class GatewayTtsRequestException : Exception
+    {
+        public GatewayTtsRequestException()
+            : base("Gateway text-to-speech request failed.")
+        {
+        }
     }
 
     /// <summary>

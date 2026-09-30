@@ -221,7 +221,14 @@
                         <ComboBoxItem x:Uid="VoiceSettingsPage_TtsWindows"    Content="Windows (built-in neural voices)"     Tag="windows"/>
                         <ComboBoxItem x:Uid="VoiceSettingsPage_TtsElevenLabs" Content="ElevenLabs (cloud, requires API key)" Tag="elevenlabs"/>
                         <ComboBoxItem x:Uid="VoiceSettingsPage_TtsMiniMax" Content="MiniMax (cloud, requires API key)" Tag="minimax"/>
+                        <ComboBoxItem x:Uid="VoiceSettingsPage_TtsGateway" Content="Gateway (uses the active Gateway provider)" Tag="gateway"/>
                     </ComboBox>
+
+                    <TextBlock x:Uid="VoiceSettingsPage_TtsGatewayInfo" x:Name="GatewayTtsInfo"
+                               Text="Gateway speech uses the active Gateway's configured provider. No API key is stored on this PC. Connect to the Gateway before playback."
+                               Style="{StaticResource CaptionTextBlockStyle}"
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                               TextWrapping="Wrap" Visibility="Collapsed"/>
 
                     <!-- Piper voice picker (local neural TTS via Sherpa-ONNX) -->
                     <StackPanel x:Name="PiperVoicePanel" Spacing="8" Visibility="Collapsed">
@@ -262,15 +269,17 @@
                     <StackPanel x:Name="WindowsVoicePanel" Spacing="8" Visibility="Collapsed">
                         <ComboBox x:Uid="VoiceSettingsPage_WindowsVoiceCombo" x:Name="WindowsVoiceCombo" Header="Voice"
                                   SelectionChanged="OnWindowsVoiceChanged" Width="300"/>
-                        <Button x:Name="PreviewVoiceButton" Click="OnPreviewVoiceClick"
-                                AutomationProperties.LabeledBy="{Binding ElementName=PreviewVoiceLabel}"
-                                Width="140">
-                            <StackPanel Orientation="Horizontal" Spacing="6">
-                                <FontIcon x:Name="PreviewVoiceIcon" Glyph="&#xE768;" FontSize="14"/>
-                                <TextBlock x:Uid="VoiceSettingsPage_PreviewVoice" x:Name="PreviewVoiceLabel" Text="Preview Voice"/>
-                            </StackPanel>
-                        </Button>
                     </StackPanel>
+
+                    <!-- Shared preview for providers without their own preview (Windows, Gateway) -->
+                    <Button x:Name="PreviewVoiceButton" Click="OnPreviewVoiceClick"
+                            AutomationProperties.LabeledBy="{Binding ElementName=PreviewVoiceLabel}"
+                            Width="140" Visibility="Collapsed">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <FontIcon x:Name="PreviewVoiceIcon" Glyph="&#xE768;" FontSize="14"/>
+                            <TextBlock x:Uid="VoiceSettingsPage_PreviewVoice" x:Name="PreviewVoiceLabel" Text="Preview Voice"/>
+                        </StackPanel>
+                    </Button>
 
                     <!-- ElevenLabs settings -->
                     <StackPanel x:Name="ElevenLabsPanel" Spacing="8" Visibility="Collapsed">

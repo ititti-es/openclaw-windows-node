@@ -2596,6 +2596,12 @@ Gebruik een van deze opties:
   <data name="VoiceSettingsPage_TtsMiniMax.Content" xml:space="preserve">
     <value>MiniMax (cloud, API-sleutel vereist)</value>
   </data>
+  <data name="VoiceSettingsPage_TtsGateway.Content" xml:space="preserve">
+    <value>Gateway (gebruikt de provider van de actieve Gateway)</value>
+  </data>
+  <data name="VoiceSettingsPage_TtsGatewayInfo.Text" xml:space="preserve">
+    <value>Gateway-spraak gebruikt de geconfigureerde provider van de actieve Gateway. Er wordt geen API-sleutel op deze pc opgeslagen. Maak verbinding met de Gateway voordat je afspeelt.</value>
+  </data>
   <data name="VoiceSettingsPage_PiperVoiceCombo.Header" xml:space="preserve">
     <value>Stem</value>
   </data>

@@ -109,6 +109,7 @@ public sealed class NodeService : IDisposable, IAsyncDisposable
     private readonly Func<SshTunnelConfig?>? _activeGatewayTunnelResolver;
     private readonly Func<string?>? _activeGatewayUrlResolver;
     private readonly Func<Uri, CancellationToken, Task<bool>>? _browserControlAuthorization;
+    private readonly Func<IOperatorGatewayClient?>? _operatorClientAccessor;
     private string? _token;
 
     // Authoritative capability list — populated by RegisterCapabilities and
@@ -212,7 +213,8 @@ public sealed class NodeService : IDisposable, IAsyncDisposable
         Func<SshTunnelConfig?>? activeGatewayTunnelResolver = null,
         Func<string?>? activeGatewayUrlResolver = null,
         Func<Uri, CancellationToken, Task<bool>>? browserControlAuthorization = null,
-        ExecApprovalsStore? execApprovalsStore = null)
+        ExecApprovalsStore? execApprovalsStore = null,
+        Func<IOperatorGatewayClient?>? operatorClientAccessor = null)
     {
         _logger = logger;
         _dispatcherQueue = dispatcherQueue;
@@ -224,6 +226,7 @@ public sealed class NodeService : IDisposable, IAsyncDisposable
         _activeGatewayUrlResolver = activeGatewayUrlResolver;
         _browserControlAuthorization = browserControlAuthorization;
         _execApprovalsStore = execApprovalsStore;
+        _operatorClientAccessor = operatorClientAccessor;
         _settings = settings;
         _enableMcpServer = enableMcpServer;
         _screenCaptureService = new ScreenCaptureService(logger);
@@ -373,7 +376,7 @@ public sealed class NodeService : IDisposable, IAsyncDisposable
         if (NodeCapabilityGating.ShouldRegisterTts(_settings))
         {
             var settings = _settings ?? throw new InvalidOperationException("Settings are required to register text-to-speech.");
-            _textToSpeechService ??= new TextToSpeechService(_logger, settings);
+            _textToSpeechService ??= new TextToSpeechService(_logger, settings, _operatorClientAccessor);
             _ttsCapability = new TtsCapability(_logger);
             _ttsCapability.SpeakRequested += OnTtsSpeakAsync;
             _ttsCapability.StatusRequested += OnTtsStatusAsync;

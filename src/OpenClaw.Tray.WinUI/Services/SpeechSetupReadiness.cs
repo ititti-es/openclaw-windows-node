@@ -25,6 +25,11 @@ public static class SpeechSetupReadiness
         if (string.Equals(provider, TtsCapability.WindowsProvider, StringComparison.Ordinal))
             return false;
 
+        // Gateway credentials and provider configuration belong to the active
+        // Gateway. Disconnection is runtime readiness, not local setup work.
+        if (string.Equals(provider, TtsCapability.GatewayProvider, StringComparison.Ordinal))
+            return false;
+
         if (string.Equals(provider, TtsCapability.PiperProvider, StringComparison.Ordinal))
         {
             if (string.IsNullOrWhiteSpace(settings.TtsPiperVoiceId))

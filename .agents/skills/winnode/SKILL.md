@@ -327,8 +327,10 @@ where `readiness` ∈ `"ready" | "initializing" | "model-downloading" | "model-n
 
 ## Text-to-speech (tts.*)
 
-Four providers - Piper (local neural via Sherpa-ONNX, default), Windows
-built-in speech, ElevenLabs (cloud), and MiniMax (cloud). Provider +
+Five providers - Piper (local neural via Sherpa-ONNX, default), Windows
+built-in speech, ElevenLabs (cloud), MiniMax (cloud), and Gateway-routed
+speech. Gateway uses the active operator connection and stores no provider
+credential on Windows. Provider +
 per-provider voice are configured in tray Settings.
 
 ### tts.speak
@@ -336,14 +338,14 @@ Speak text aloud on the Windows node.
 ```
 {
   "text": "string",           // required
-  "provider": "piper|windows|elevenlabs|minimax",  // optional; omit to use TtsProvider setting
+  "provider": "piper|windows|elevenlabs|minimax|gateway",  // optional; omit to use TtsProvider setting
   "voiceId": "string",        // optional, overrides the per-provider configured voice
   "model": "string",          // optional, cloud providers only
   "interrupt": false          // default false; true cuts off any in-progress playback
 }
 ```
 When `provider` is omitted and the configured provider isn't usable (no
-cloud API key, Piper voice not downloaded), the node falls back to Windows
+cloud API key, Piper voice not downloaded, Gateway disconnected), the node falls back to Windows
 TTS so playback still happens. Explicit `provider` requests stay strict and
 do not silently reroute. Returns `{ spoken, provider, requestedProvider, fellBack, contentType, durationMs }`
 where `provider` is the provider that actually spoke.
@@ -353,7 +355,7 @@ TTS provider readiness. No params. Carries no PII (no voice ids, no key
 fragments, no device names).
 Returns `{ configuredProvider, effectiveProvider, willFallBack, providers[{ provider, readiness, isReady }] }`
 where `effectiveProvider` is what would run now after fallback and `readiness`
-∈ `"ready" | "needs-api-key" | "needs-voice" | "voice-not-downloaded" | "unavailable"`.
+∈ `"ready" | "needs-api-key" | "needs-voice" | "voice-not-downloaded" | "gateway-disconnected" | "unavailable"`.
 The configured/effective view reflects configured defaults only; explicit
 `tts.speak` provider requests stay strict and may not match the default
 snapshot.

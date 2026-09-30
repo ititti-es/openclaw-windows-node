@@ -771,7 +771,7 @@ public sealed partial class VoiceSettingsPage : Page
 
         try
         {
-            using var tts = new TextToSpeechService(new AppLogger(), CurrentApp.Settings);
+            using var tts = new TextToSpeechService(new AppLogger(), CurrentApp.Settings, () => CurrentApp.GatewayClient);
             await tts.SpeakAsync(new OpenClaw.Shared.Capabilities.TtsSpeakArgs
             {
                 Text = L("VoiceSettingsPage_CompanionPreviewText"),
@@ -836,12 +836,15 @@ public sealed partial class VoiceSettingsPage : Page
         var isPiper = string.Equals(providerTag, "piper", StringComparison.OrdinalIgnoreCase);
         var isElevenLabs = string.Equals(providerTag, "elevenlabs", StringComparison.OrdinalIgnoreCase);
         var isMiniMax = string.Equals(providerTag, "minimax", StringComparison.OrdinalIgnoreCase);
-        var isWindows = !isPiper && !isElevenLabs && !isMiniMax;
+        var isGateway = string.Equals(providerTag, TtsCapability.GatewayProvider, StringComparison.OrdinalIgnoreCase);
+        var isWindows = !isPiper && !isElevenLabs && !isMiniMax && !isGateway;
 
         PiperVoicePanel.Visibility = isPiper ? Visibility.Visible : Visibility.Collapsed;
         WindowsVoicePanel.Visibility = isWindows ? Visibility.Visible : Visibility.Collapsed;
         ElevenLabsPanel.Visibility = isElevenLabs ? Visibility.Visible : Visibility.Collapsed;
         MiniMaxPanel.Visibility = isMiniMax ? Visibility.Visible : Visibility.Collapsed;
+        GatewayTtsInfo.Visibility = isGateway ? Visibility.Visible : Visibility.Collapsed;
+        PreviewVoiceButton.Visibility = isWindows || isGateway ? Visibility.Visible : Visibility.Collapsed;
     }
 
     private void OnTtsProviderChanged(object sender, SelectionChangedEventArgs e)
@@ -888,14 +891,18 @@ public sealed partial class VoiceSettingsPage : Page
 
         try
         {
-            var tts = new TextToSpeechService(new AppLogger(), CurrentApp.Settings);
+            var provider = CurrentApp.Settings.TtsProvider;
+            var isWindows = string.Equals(provider, TtsCapability.WindowsProvider, StringComparison.OrdinalIgnoreCase);
+            var tts = new TextToSpeechService(new AppLogger(), CurrentApp.Settings, () => CurrentApp.GatewayClient);
             try
             {
                 await tts.SpeakAsync(new OpenClaw.Shared.Capabilities.TtsSpeakArgs
                 {
                     Text = L("VoiceSettingsPage_CompanionPreviewText"),
-                    Provider = CurrentApp.Settings.TtsProvider,
-                    VoiceId = WindowsVoiceCombo.SelectedItem is ComboBoxItem item ? item.Tag?.ToString() : null,
+                    Provider = provider,
+                    // Only the Windows provider takes a local voice id; Gateway
+                    // uses the voice configured on the Gateway.
+                    VoiceId = isWindows && WindowsVoiceCombo.SelectedItem is ComboBoxItem item ? item.Tag?.ToString() : null,
                     Interrupt = true
                 });
             }
@@ -908,7 +915,7 @@ public sealed partial class VoiceSettingsPage : Page
         {
             // Show error inline (sanitized — full detail in the log). Swap the
             // Play glyph for ErrorBadge while the error label is visible.
-            Logger.Error($"Windows TTS preview failed: {ex}");
+            Logger.Error($"TTS preview failed: {ex}");
             PreviewVoiceIcon.Glyph = "\uEA39";
             PreviewVoiceLabel.Text = L("VoiceSettingsPage_StatusError");
             await System.Threading.Tasks.Task.Delay(3000);

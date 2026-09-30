@@ -662,6 +662,7 @@ public partial class App : Application, OpenClawTray.Services.IAppCommands, IPer
         _chatCoordinator = new OpenClawTray.Chat.OpenClawChatCoordinator(
             _settings,
             () => _nodeService,
+            () => _connectionManager?.OperatorClient,
             new AppLogger(),
             _dispatcherQueue is null
                 ? null
@@ -2421,7 +2422,8 @@ public partial class App : Application, OpenClawTray.Services.IAppCommands, IPer
                         controlRecord,
                         cancellationToken)).Kind == GatewayEndpointProvenanceKind.ExpectedManagedGateway;
                 },
-                execApprovalsStore: ExecApprovalsStore);
+                execApprovalsStore: ExecApprovalsStore,
+                operatorClientAccessor: () => _connectionManager?.OperatorClient);
             _nodeService.StatusChanged += OnNodeStatusChanged;
             _nodeService.NotificationRequested += OnNodeNotificationRequested;
             _nodeService.ToastRequested += OnNodeToastRequested;

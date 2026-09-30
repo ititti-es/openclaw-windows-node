@@ -8007,4 +8007,6 @@ Suas configurações, gateway, arquivos e modelos permanecem onde estão.</value
   <data name="ChatPage_SetupCheckAgain.Content" xml:space="preserve">
     <value>Verificar novamente</value>
   </data>
+  <data name="VoiceSettingsPage_TtsGateway.Content" xml:space="preserve"><value>Gateway (usa o provedor do Gateway ativo)</value></data>
+  <data name="VoiceSettingsPage_TtsGatewayInfo.Text" xml:space="preserve"><value>A fala do Gateway usa o provedor configurado no Gateway ativo. Nenhuma chave de API é armazenada neste PC. Conecte-se ao Gateway antes da reprodução.</value></data>
 </root>
