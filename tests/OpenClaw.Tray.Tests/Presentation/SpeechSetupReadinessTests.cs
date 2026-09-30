@@ -110,4 +110,18 @@ public sealed class SpeechSetupReadinessTests
 
         Assert.True(needsWarning);
     }
+
+    [Theory]
+    [InlineData("gateway")]
+    [InlineData(" Gateway ")]
+    public void ConfiguredGatewayTtsProvider_DoesNotRequireLocalSetup(string provider)
+    {
+        using var temp = new TempDir();
+        var settings = new SettingsManager(temp.Path)
+        {
+            TtsProvider = provider,
+        };
+
+        Assert.False(SpeechSetupReadiness.IsConfiguredTtsProviderSetupRequired(settings));
+    }
 }

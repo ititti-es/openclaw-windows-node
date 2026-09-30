@@ -2595,6 +2595,12 @@
   <data name="VoiceSettingsPage_TtsMiniMax.Content" xml:space="preserve">
     <value>MiniMax（雲端，需要 API 金鑰）</value>
   </data>
+  <data name="VoiceSettingsPage_TtsGateway.Content" xml:space="preserve">
+    <value>Gateway（使用目前 Gateway 的提供者）</value>
+  </data>
+  <data name="VoiceSettingsPage_TtsGatewayInfo.Text" xml:space="preserve">
+    <value>Gateway 語音使用目前 Gateway 上設定的提供者。此電腦不會儲存任何 API 金鑰。播放前請先連線到 Gateway。</value>
+  </data>
   <data name="VoiceSettingsPage_PiperVoiceCombo.Header" xml:space="preserve">
     <value>語音</value>
   </data>

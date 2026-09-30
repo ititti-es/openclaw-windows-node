@@ -14,6 +14,11 @@ public sealed class TtsCapability : NodeCapabilityBase
     public const string ElevenLabsProvider = "elevenlabs";
     public const string MiniMaxProvider = "minimax";
     /// <summary>
+    /// Gateway-routed TTS. Audio synthesis and provider credentials remain on
+    /// the active Gateway; Windows receives only the returned audio bytes.
+    /// </summary>
+    public const string GatewayProvider = "gateway";
+    /// <summary>
     /// Local neural TTS via Sherpa-ONNX wrapping Piper voices. No network
     /// egress; voice models download once to %LOCALAPPDATA%.
     /// </summary>
@@ -36,9 +41,11 @@ public sealed class TtsCapability : NodeCapabilityBase
     public const string ReadinessVoiceNotDownloaded = "voice-not-downloaded";
     /// <summary>Provider is unknown or otherwise unusable.</summary>
     public const string ReadinessUnavailable = "unavailable";
+    /// <summary>The configured Gateway provider is disconnected.</summary>
+    public const string ReadinessGatewayDisconnected = "gateway-disconnected";
 
     /// <summary>All known providers, in catalog order (Piper is the default).</summary>
-    public static readonly string[] AllProviders = [PiperProvider, WindowsProvider, ElevenLabsProvider, MiniMaxProvider];
+    public static readonly string[] AllProviders = [PiperProvider, WindowsProvider, ElevenLabsProvider, MiniMaxProvider, GatewayProvider];
 
     private static readonly string[] _commands = [SpeakCommand, StatusCommand];
 
@@ -259,6 +266,7 @@ public sealed class TtsProviderStatus
     /// <see cref="TtsCapability.ReadinessNeedsApiKey"/>,
     /// <see cref="TtsCapability.ReadinessNeedsVoice"/>,
     /// <see cref="TtsCapability.ReadinessVoiceNotDownloaded"/>, or
+    /// <see cref="TtsCapability.ReadinessGatewayDisconnected"/>, or
     /// <see cref="TtsCapability.ReadinessUnavailable"/>.
     /// </summary>
     public string Readiness { get; set; } = TtsCapability.ReadinessUnavailable;

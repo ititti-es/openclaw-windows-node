@@ -2595,6 +2595,12 @@ Utilisez l'une de ces options :
   <data name="VoiceSettingsPage_TtsMiniMax.Content" xml:space="preserve">
     <value>MiniMax (cloud, clé API requise)</value>
   </data>
+  <data name="VoiceSettingsPage_TtsGateway.Content" xml:space="preserve">
+    <value>Gateway (utilise le fournisseur du Gateway actif)</value>
+  </data>
+  <data name="VoiceSettingsPage_TtsGatewayInfo.Text" xml:space="preserve">
+    <value>La synthèse vocale Gateway utilise le fournisseur configuré sur le Gateway actif. Aucune clé API n'est stockée sur ce PC. Connectez-vous au Gateway avant la lecture.</value>
+  </data>
   <data name="VoiceSettingsPage_PiperVoiceCombo.Header" xml:space="preserve">
     <value>Voix</value>
   </data>
